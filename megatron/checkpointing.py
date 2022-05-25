@@ -127,17 +127,21 @@ def read_metadata(tracker_filename):
 
     # Get the max iteration retrieved across the ranks.
     iters_cuda = torch.cuda.LongTensor([iteration])
-    torch.distributed.all_reduce(iters_cuda, op=torch.distributed.ReduceOp.MAX)
+    
+    if torch.distributed.is_initialized():
+        torch.distributed.all_reduce(iters_cuda, op=torch.distributed.ReduceOp.MAX)
+    
     max_iter = iters_cuda[0].item()
-
     # We should now have all the same iteration.
     # If not, print a warning and chose the maximum
     # iteration across all ranks.
-    if iteration != max_iter:
-        print('WARNING: on rank {} found iteration {} in the '
-              'metadata while max iteration across the ranks '
-              'is {}, replacing it with max iteration.'.format(
-                  rank, iteration, max_iter), flush=True)
+    if torch.distributed.is_initialized():
+        rank = torch.distributed.get_rank()
+        if iteration != max_iter:
+            print('WARNING: on rank {} found iteration {} in the '
+                'metadata while max iteration across the ranks '
+                'is {}, replacing it with max iteration.'.format(
+                    rank, iteration, max_iter), flush=True)
     return max_iter, release
 
 
@@ -187,6 +191,9 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
         state_dict['args'] = args
         state_dict['checkpoint_version'] = 3.0
         state_dict['iteration'] = iteration
+
+    if not isinstance(model, list):
+        model = [model]
         if len(model) == 1:
             state_dict['model'] = model[0].state_dict_for_save_checkpoint()
         else:
@@ -362,9 +369,41 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
                                  checkpoint_name))
                 sys.exit()
 
+    # if isinstance(model, list):
+    #     named_parameters = model[0].named_parameters()
+    # else:
+    #     named_parameters = model.named_parameters()
+
+    # for i, (name, _) in enumerate(named_parameters):
+    #     if "word_embeddings" in name:
+    #         embedding_name = name
+    #         idx = i
+    #         break
+    # else: raise("word_embeddings does not exist in model's parameters.")
+
+    # state_dict['args'].padded_vocab_size = args.padded_vocab_size
+
+    # def resize_vocab_size_for_optimizer_state(state):
+    #     new_state = torch.zeros(args.padded_vocab_size, args.hidden_size)
+    #     new_state[:args.vocab_size] = state[:args.vocab_size]
+    #     state.data = new_state
+
+    # def resize_vocab_embedding(model_dict):
+    #     modules = embedding_name.split('.')
+    #     modules = list(filter(lambda name: name != 'module', modules))
+    #     pass
+
+
+    # resize_vocab_size_for_optimizer_state(state_dict['optimizer']['optimizer']['state'][idx]['exp_avg'])
+    # resize_vocab_size_for_optimizer_state(state_dict['optimizer']['optimizer']['state'][idx]['exp_avg_sq'])
+    
+
     # Check arguments.
     assert args.consumed_train_samples == 0
     assert args.consumed_valid_samples == 0
+    # if torch.distributed.get_rank() == 0:
+    #     import ipdb; ipdb.set_trace()
+    # torch.distributed.barrier()
     if 'args' in state_dict:
         checkpoint_args = state_dict['args']
         check_checkpoint_args(checkpoint_args)
@@ -376,7 +415,9 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
     else:
         print_rank_0('could not find arguments in the checkpoint ...')
 
-    # Model.
+    # Model
+    if not isinstance(model, list):
+        model = [model]
     if len(model) == 1:
         model[0].load_state_dict(state_dict['model'], strict=strict)
     else:

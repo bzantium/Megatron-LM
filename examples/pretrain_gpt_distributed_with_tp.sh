@@ -11,7 +11,8 @@ NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
 DATA_PATH=training/gpt/data/gpt2_text_document
-CHECKPOINT_PATH=training/gpt/checkpoints/gpt_345m_tp2_pp2
+SAVE_PATH=training/gpt/checkpoints/gpt_345m_tp4
+LOAD_PATH=training/gpt/checkpoints/gpt_345m_tp4
 VOCAB_FILE=training/gpt/tokenizer/gpt2-vocab.json
 MERGE_FILE=training/gpt/tokenizer/gpt2-merges.txt
 
@@ -19,8 +20,7 @@ DISTRIBUTED_ARGS="--nproc_per_node $GPUS_PER_NODE --nnodes $NNODES --node_rank $
 
 python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        pretrain_gpt.py \
-       --tensor-model-parallel-size 2 \
-       --pipeline-model-parallel-size 2 \
+       --tensor-model-parallel-size 4 \
        --num-layers 24 \
        --hidden-size 1024 \
        --num-attention-heads 16 \
@@ -28,10 +28,10 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --global-batch-size 64 \
        --seq-length 1024 \
        --max-position-embeddings 1024 \
-       --train-iters 1000 \
+       --train-iters 200 \
        --lr-decay-iters 320000 \
-       --save $CHECKPOINT_PATH \
-       --load $CHECKPOINT_PATH \
+       --save $SAVE_PATH \
+       --load $LOAD_PATH \
        --data-path $DATA_PATH \
        --vocab-file $VOCAB_FILE \
        --merge-file $MERGE_FILE \
@@ -46,7 +46,7 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --lr-warmup-fraction .01 \
        --recompute-method uniform \
        --log-interval 100 \
-       --save-interval 1000 \
-       --eval-interval 500 \
+       --save-interval 100 \
+       --eval-interval 100 \
        --eval-iters 10 \
        --fp16

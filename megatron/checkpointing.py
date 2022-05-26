@@ -177,9 +177,15 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
 
     # Only rank zero of the data parallel writes to the disk.
     model = utils.unwrap_model(model)
-
-    print_rank_0('saving checkpoint at iteration {:7d} to {}'.format(
-        iteration, args.save))
+    
+    if iteration == "release":
+        print_rank_0('saving checkpoint at iteration {:s} to {}'.format(
+            iteration, args.save))
+        release = True
+    else:
+        print_rank_0('saving checkpoint at iteration {:7d} to {}'.format(
+            iteration, args.save))
+        release = False
 
     # collect rng state across data parallel ranks
     rng_state = get_rng_state()
@@ -213,7 +219,7 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
             state_dict["rng_state"] = rng_state
 
         # Save.
-        checkpoint_name = get_checkpoint_name(args.save, iteration)
+        checkpoint_name = get_checkpoint_name(args.save, iteration, release)
         ensure_directory_exists(checkpoint_name)
         torch.save(state_dict, checkpoint_name)
 
@@ -221,8 +227,12 @@ def save_checkpoint(iteration, model, optimizer, opt_param_scheduler):
     if torch.distributed.is_initialized():
         torch.distributed.barrier()
 
-    print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}'.format(
-        iteration, args.save))
+    if release:
+        print_rank_0('  successfully saved checkpoint at iteration {:s} to {}'.format(
+            iteration, args.save))
+    else:
+        print_rank_0('  successfully saved checkpoint at iteration {:7d} to {}'.format(
+            iteration, args.save))
 
     # And update the latest iteration
     if not torch.distributed.is_initialized() or torch.distributed.get_rank() == 0:
@@ -369,41 +379,9 @@ def load_checkpoint(model, optimizer, opt_param_scheduler, load_arg='load', stri
                                  checkpoint_name))
                 sys.exit()
 
-    # if isinstance(model, list):
-    #     named_parameters = model[0].named_parameters()
-    # else:
-    #     named_parameters = model.named_parameters()
-
-    # for i, (name, _) in enumerate(named_parameters):
-    #     if "word_embeddings" in name:
-    #         embedding_name = name
-    #         idx = i
-    #         break
-    # else: raise("word_embeddings does not exist in model's parameters.")
-
-    # state_dict['args'].padded_vocab_size = args.padded_vocab_size
-
-    # def resize_vocab_size_for_optimizer_state(state):
-    #     new_state = torch.zeros(args.padded_vocab_size, args.hidden_size)
-    #     new_state[:args.vocab_size] = state[:args.vocab_size]
-    #     state.data = new_state
-
-    # def resize_vocab_embedding(model_dict):
-    #     modules = embedding_name.split('.')
-    #     modules = list(filter(lambda name: name != 'module', modules))
-    #     pass
-
-
-    # resize_vocab_size_for_optimizer_state(state_dict['optimizer']['optimizer']['state'][idx]['exp_avg'])
-    # resize_vocab_size_for_optimizer_state(state_dict['optimizer']['optimizer']['state'][idx]['exp_avg_sq'])
-    
-
     # Check arguments.
     assert args.consumed_train_samples == 0
     assert args.consumed_valid_samples == 0
-    # if torch.distributed.get_rank() == 0:
-    #     import ipdb; ipdb.set_trace()
-    # torch.distributed.barrier()
     if 'args' in state_dict:
         checkpoint_args = state_dict['args']
         check_checkpoint_args(checkpoint_args)

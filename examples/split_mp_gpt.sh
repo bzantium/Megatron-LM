@@ -5,11 +5,11 @@ PIPELINE_MODEL_PARALLEL_SIZE=2
 
 VOCAB_FILE=training/gpt/tokenizer/gpt2-vocab.json
 MERGE_FILE=training/gpt/tokenizer/gpt2-merges.txt
-LOAD_PATH=training/gpt/checkpoints/gpt_345m_tp2_pp2
-SAVE_PATH=training/gpt/checkpoints/gpt_345m_merged_tp_pp
+LOAD_PATH=training/gpt/checkpoints/gpt_345m
+SAVE_PATH=training/gpt/checkpoints/gpt_345m_splitted_tp2_pp2
 
 WORLD_SIZE=$((TENSOR_MODEL_PARALLEL_SIZE * PIPELINE_MODEL_PARALLEL_SIZE)) \
-                                python tools/merge_mp_partitions.py \
+                                python tools/split_into_mp_partitions.py \
                                 --model-type GPT \
                                 --tensor-model-parallel-size $TENSOR_MODEL_PARALLEL_SIZE \
                                 --pipeline-model-parallel-size $PIPELINE_MODEL_PARALLEL_SIZE \

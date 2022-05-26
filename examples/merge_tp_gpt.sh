@@ -1,12 +1,12 @@
 #!/bin/bash
 
-TENSOR_MODEL_PARALLEL_SIZE=2
-PIPELINE_MODEL_PARALLEL_SIZE=2
+TENSOR_MODEL_PARALLEL_SIZE=4
+PIPELINE_MODEL_PARALLEL_SIZE=1
 
 VOCAB_FILE=training/gpt/tokenizer/gpt2-vocab.json
 MERGE_FILE=training/gpt/tokenizer/gpt2-merges.txt
-LOAD_PATH=training/gpt/checkpoints/gpt_345m_tp2_pp2
-SAVE_PATH=training/gpt/checkpoints/gpt_345m_merged_tp_pp
+LOAD_PATH=training/gpt/checkpoints/gpt_345m_tp4
+SAVE_PATH=training/gpt/checkpoints/gpt_345m_merged_tp
 
 WORLD_SIZE=$((TENSOR_MODEL_PARALLEL_SIZE * PIPELINE_MODEL_PARALLEL_SIZE)) \
                                 python tools/merge_mp_partitions.py \
@@ -21,5 +21,5 @@ WORLD_SIZE=$((TENSOR_MODEL_PARALLEL_SIZE * PIPELINE_MODEL_PARALLEL_SIZE)) \
                                 --num-attention-heads 16 \
                                 --seq-length 1024 \
                                 --max-position-embeddings 1024 \
-                                --load $LOAD_PATH \
+                                --load $CHECKPOINT_PATH \
                                 --save $SAVE_PATH

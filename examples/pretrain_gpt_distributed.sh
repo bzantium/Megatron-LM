@@ -11,7 +11,7 @@ NODE_RANK=0
 WORLD_SIZE=$(($GPUS_PER_NODE*$NNODES))
 
 DATA_PATH=training/gpt/data/gpt2_text_document
-CHECKPOINT_PATH=training/gpt/checkpoints/gpt_345m
+CHECKPOINT_PATH=training/gpt/checkpoints/gpt_345m_merged_tp_pp
 VOCAB_FILE=training/gpt/tokenizer/gpt2-vocab.json
 MERGE_FILE=training/gpt/tokenizer/gpt2-merges.txt
 
@@ -47,5 +47,6 @@ python -m torch.distributed.launch $DISTRIBUTED_ARGS \
        --save-interval 10000 \
        --eval-interval 1000 \
        --eval-iters 10 \
-       --DDP-impl torch \
-       --fp16
+       --fp16 \
+       --no-load-optim \
+       --no-load-rng

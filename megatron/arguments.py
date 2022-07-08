@@ -187,6 +187,12 @@ def parse_args(extra_args_provider=None, defaults={},
                       'gradient accumulation. Setting gradient_accumulation_fusion '
                       'to False', flush=True)
 
+    # If we use the distributed optimizer, we need to have local DDP
+    # and we should make sure use-contiguous-buffers-in-local-ddp is on.
+    if args.use_distributed_optimizer:
+        assert args.DDP_impl == 'local'
+        assert args.use_contiguous_buffers_in_local_ddp
+
     # For torch DDP, we do not use contiguous buffer
     if args.DDP_impl == 'torch':
         args.use_contiguous_buffers_in_local_ddp = False
@@ -304,7 +310,13 @@ def parse_args(extra_args_provider=None, defaults={},
         assert args.recompute_method is None, \
             'recompute method is not yet supported for ' \
             'selective recomputing granularity'
-        
+
+    # disable sequence parallelism when tp=1
+    # to avoid change in numerics when
+    # sequence_parallelism is enabled.
+    if args.tensor_model_parallel_size == 1:
+        args.sequence_parallel = False
+
     # disable async_tensor_model_parallel_allreduce when
     # model parallel memory optimization is enabled
     if args.sequence_parallel:
@@ -759,6 +771,9 @@ def _add_distributed_args(parser):
                        'is placed on its own pipeline stage, without any '
                        'transformer layers. (For T5, this flag currently only '
                        'affects the encoder embedding.)')
+    group.add_argument('--use-distributed-optimizer', action='store_true',
+                       help='Use distributed optimizer.')
+
     return parser
 
 

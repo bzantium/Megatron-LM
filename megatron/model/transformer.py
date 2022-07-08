@@ -19,7 +19,7 @@ from contextlib import nullcontext
 import torch
 import torch.nn.functional as F
 
-from megatron import get_timers, get_args
+from megatron import get_timers, get_args, get_global_memory_buffer
 from megatron import mpu
 from .module import MegatronModule
 from megatron.model.enums import AttnMaskType, ModelType, LayerType, AttnType
@@ -234,12 +234,9 @@ class CoreAttention(MegatronModule):
                                    output_size[0] * output_size[1], -1)
 
         # preallocting input tensor: [b * np, sq, sk]
-        matmul_input_buffer = torch.empty(
-            output_size[0]*output_size[1],
-            output_size[2],
-            output_size[3],
-            dtype=query_layer.dtype,
-            device=torch.cuda.current_device())
+        matmul_input_buffer = get_global_memory_buffer().get_tensor(
+            (output_size[0]*output_size[1], output_size[2], output_size[3]),
+            query_layer.dtype, "mpu")
 
         # Raw attention scores. [b * np, sq, sk]
         matmul_result = torch.baddbmm(
@@ -683,6 +680,17 @@ class ParallelTransformerLayer(MegatronModule):
                     mlp_bias.expand_as(residual),
                     residual,
                     self.hidden_dropout)
+
+            # Jit compiled function creates 'view' tensor. This tensor
+            # potentially gets saved in the MPU checkpoint function context,
+            # which rejects view tensors. While making a viewless tensor here
+            # won't result in memory savings (like the data loader, or
+            # p2p_communication), it serves to document the origin of this
+            # 'view' tensor.
+            output = mpu.make_viewless_tensor(inp = output,
+                                              requires_grad = output.requires_grad,
+                                              keep_graph = True)
+
         else:
             out = torch.nn.functional.dropout(mlp_output + mlp_bias,
                                               p=self.hidden_dropout,
